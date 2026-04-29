@@ -1,10 +1,12 @@
+from datetime import time
+
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from filters.admin_filter import IsAdmin
 from database import async_session_maker
-from services.db_service import add_service, add_master, get_services
+from services.db_service import add_service, add_master, get_services, set_master_schedule, get_future_appointments
 
 
 admin_router = Router()
@@ -65,3 +67,52 @@ async def cmd_list_services(message: types.Message):
         text = "Список услуг:\n" + "\n".join(
             f"{s.id}. {s.name} ({s.duration} мин)" for s in services)
         await message.reply(text)
+
+@admin_router.message(Command('set_schedule'))
+async def cmd_set_schedule(message: types.Message):
+    """
+    Формат: /set_schedule master_id день_недели начало конец [обед_начало обед_конец].
+    
+    День недели: 0=ПН, 6=ВС. Время в формате ЧЧ:ММ.
+    Пример: /set_schedule 1 0 10:00 20:00 14:00 15:00
+    """
+    parts = message.text.split()
+    if len(parts) < 5:
+        await message.reply('Используйте: /set_schedule <master_id> <день_недели> <начало> <конец> [обед_начало обед_конец]')
+        return
+    try:
+        master_id = int(parts[1])
+        day_of_week = int(parts[2])
+        start_time = time.fromisoformat(parts[3])
+        end_time = time.fromisoformat(parts[4])
+        if not (0 <= day_of_week <= 6):
+            raise ValueError
+        lunch_start = None
+        lunch_end = None
+        if len(parts) >= 7:
+            lunch_start = time.fromisoformat(parts[5])
+            lunch_end = time.fromisoformat(parts[6])
+        async with async_session_maker() as session:
+            await set_master_schedule(session, master_id, day_of_week, start_time, end_time, lunch_start, lunch_end)
+        await message.reply(f'Расписание для мастера {master_id} обновлено.')
+    except Exception as e:
+        await message.reply(f'Ошибка: {e}. Проверьте формат.')
+
+@admin_router.message(Command('view_bookings'))
+async def cmd_view_bookings(message: types.Message):
+    """Показать все будущие записи."""
+    async with async_session_maker() as session:
+        appointments = await get_future_appointments(session)
+    if not appointments:
+        await message.reply('Будущих записей нет.')
+        return
+    response_lines = ['Предстоящие записи:']
+    for app in appointments:
+        response_lines.append(
+            f'• {app.date_time.strftime("%d.%m.%Y %H:%M")} — '
+            f'{app.service.name} у {app.master.full_name}, '
+            f'клиент: {app.user.full_name} ({app.user.phone_number})'
+        )
+        if app.comment:
+            response_lines.append(f'  Комментарий: {app.comment}')
+    await message.reply('\n'.join(response_lines))

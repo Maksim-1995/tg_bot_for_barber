@@ -1,6 +1,6 @@
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 
 from models import Service, Master, Schedule, User, Appointment
 
@@ -86,3 +86,53 @@ async def create_appointment(session: AsyncSession, user_id: int, master_id: int
     session.add(appointment)
     await session.commit()
     return appointment
+
+async def set_master_schedule(
+    session: AsyncSession,
+    master_id: int,
+    day_of_week: int,
+    start_time: datetime,
+    end_time,
+    lunch_start=None,
+    lunch_end=None
+):
+    """Создаёт или обновляет запись расписания для мастера на указанный день недели."""
+    # Ищем существующую запись
+    result = await session.execute(
+        select(Schedule).where(
+            Schedule.master_id == master_id,
+            Schedule.day_of_week == day_of_week
+        )
+    )
+    schedule = result.scalar_one_or_none()
+    if schedule:
+        schedule.start_time = start_time
+        schedule.end_time = end_time
+        schedule.is_working = 1
+        schedule.lunch_start = lunch_start
+        schedule.lunch_end = lunch_end
+    else:
+        schedule = Schedule(
+            master_id=master_id,
+            day_of_week=day_of_week,
+            start_time=start_time,
+            end_time=end_time,
+            lunch_start=lunch_start,
+            lunch_end=lunch_end
+        )
+        session.add(schedule)
+    await session.commit()
+
+async def get_future_appointments(session: AsyncSession):
+    """Возвращает все записи, начиная с текущего момента, отсортированные по дате."""
+    now = datetime.now()
+    result = await session.execute(
+        select(Appointment)
+        .where(Appointment.date_time >= now)
+        .order_by(Appointment.date_time)
+    )
+    return result.scalars().all()
+
+async def get_appointment_by_id(session: AsyncSession, appointment_id: int):
+    """Возвращает запись по ID."""
+    return await session.get(Appointment, appointment_id)

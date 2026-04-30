@@ -89,7 +89,7 @@ async def start_booking(target: types.Message | types.CallbackQuery, state: FSMC
 async def start_command(message: types.Message):
     """Приветствие и главное меню."""
     await message.answer(
-        'Добро пожаловать в парикмахерскую «Народная»!',
+        'Добро пожаловать в парикмахерскую «Народная цирюльня»!',
         reply_markup=main_reply_kb()
     )
 
@@ -379,6 +379,6 @@ async def greeting_on_any_message(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
     if current_state is None:
         await message.answer(
-            'Добро пожаловать в парикмахерскую «Народная»!',
+            'Добро пожаловать в парикмахерскую «Народная цирюльня»!',
             reply_markup=main_reply_kb()
         )

@@ -42,7 +42,7 @@ async def get_masters_by_service(session: AsyncSession, service_id: int):
     )
     result = masters.scalars().all()
     if not result:
-        # Если связь не задана, вернуть всех мастеров
+        # Если связь не задана, вернуть всех мастеров.
         all_masters = await session.execute(select(Master))
         return all_masters.scalars().all()
     return result
@@ -62,10 +62,10 @@ async def create_appointment(session: AsyncSession, user_id: int, master_id: int
                              service_id: int, date_time: datetime, comment: str = None):
     service = await session.get(Service, service_id)
     if not service:
-        raise ValueError("Услуга не найдена")
+        raise ValueError('Услуга не найдена')
     end_time = date_time + timedelta(minutes=service.duration)
-    # Проверка на двойную запись (конкурентная проверка)
-    # Ищем пересекающиеся записи у этого мастера
+    # Проверка на двойную запись (конкурентная проверка).
+    # Ищем пересекающиеся записи у этого мастера.
     collision = await session.execute(
         select(Appointment).where(
             Appointment.master_id == master_id,
@@ -74,7 +74,7 @@ async def create_appointment(session: AsyncSession, user_id: int, master_id: int
         )
     )
     if collision.scalars().first():
-        raise ValueError("Это время уже занято")
+        raise ValueError('Это время уже занято')
     appointment = Appointment(
         user_id=user_id,
         master_id=master_id,
@@ -97,7 +97,7 @@ async def set_master_schedule(
     lunch_end=None
 ):
     """Создаёт или обновляет запись расписания для мастера на указанный день недели."""
-    # Ищем существующую запись
+    # Ищем существующую запись.
     result = await session.execute(
         select(Schedule).where(
             Schedule.master_id == master_id,

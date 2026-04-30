@@ -1,6 +1,7 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import Column, Integer, String, DateTime, Time, ForeignKey, Table
 from sqlalchemy.orm import DeclarativeBase, relationship
-from datetime import datetime, timezone
 
 
 class Base(DeclarativeBase):
@@ -21,7 +22,7 @@ class Service(Base):
     __tablename__ = 'services'
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    duration = Column(Integer, nullable=False)  # в минутах
+    duration = Column(Integer, nullable=False)  # в минутах.
 
 
 class Master(Base):
@@ -31,7 +32,7 @@ class Master(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     full_name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    # Услуги, которые может выполнять мастер
+    # Услуги, которые может выполнять мастер.
     services = relationship('Service', secondary=master_service, backref='masters')
 
 
@@ -41,12 +42,12 @@ class Schedule(Base):
     __tablename__ = 'schedules'
     id = Column(Integer, primary_key=True, autoincrement=True)
     master_id = Column(Integer, ForeignKey('masters.id'), nullable=False)
-    day_of_week = Column(Integer, nullable=False)  # 0=ПН, 6=ВС
+    day_of_week = Column(Integer, nullable=False)  # 0=ПН, 6=ВС.
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
     is_working = Column(Integer, default=1)
-    lunch_start = Column(Time, nullable=True)   # Начало обеда (если есть)
-    lunch_end = Column(Time, nullable=True)     # Конец обеда
+    lunch_start = Column(Time, nullable=True)   # Начало обеда (если есть).
+    lunch_end = Column(Time, nullable=True)     # Конец обеда.
     master = relationship('Master', backref='schedules')
 
 
@@ -72,7 +73,7 @@ class Appointment(Base):
     date_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=False)
     comment = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     user = relationship('User', backref='appointments')
     master = relationship('Master', backref='appointments')
     service = relationship('Service', backref='appointments')

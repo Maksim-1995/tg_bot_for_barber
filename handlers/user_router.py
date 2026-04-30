@@ -23,10 +23,28 @@ from services.db_service import (
 )
 from services.calendar_service import generate_date_keyboard, get_free_slots
 from utils.constants import SALON_ADDRESS
+from utils.validators import (
+    validate_name,
+    validate_phone, 
+    sanitize_comment
+)
 from models import Service, Master, User
 
 
-# Клавиатура с кнопкой отмены, показывается при текстовых вводах
+from aiogram.exceptions import TelegramBadRequest
+
+async def safe_edit_text(message: types.Message, text: str, reply_markup=None):
+    """
+    Безопасное редактирование сообщения:
+    если сообщение не изменилось – игнорирует ошибку Telegram.
+    """
+    try:
+        await message.edit_text(text, reply_markup=reply_markup)
+    except TelegramBadRequest as error:
+        if 'message is not modified' not in str(error):
+            raise  # если ошибка другая – пробрасываем дальше.
+
+# Клавиатура с кнопкой отмены, показывается при текстовых вводах.
 CANCEL_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text='❌ Отмена')]],
     resize_keyboard=True,
@@ -37,7 +55,7 @@ user_router = Router()
 
 
 # -------------------------------------------------------------------
-# Вспомогательная функция старта записи (используется из разных мест)
+# Вспомогательная функция старта записи (используется из разных мест).
 async def start_booking(target: types.Message | types.CallbackQuery, state: FSMContext):
     """Общая логика начала записи: показывает список услуг."""
     async with async_session_maker() as session:
@@ -66,7 +84,7 @@ async def start_booking(target: types.Message | types.CallbackQuery, state: FSMC
 
 
 # -------------------------------------------------------------------
-# Команда /start – приветствие с постоянной кнопкой «Записаться»
+# Команда /start – приветствие с постоянной кнопкой «Записаться».
 @user_router.message(CommandStart())
 async def start_command(message: types.Message):
     """Приветствие и главное меню."""
@@ -77,7 +95,7 @@ async def start_command(message: types.Message):
 
 
 # -------------------------------------------------------------------
-# Запуск записи по reply-кнопке «📝 Записаться»
+# Запуск записи по reply-кнопке «📝 Записаться».
 @user_router.message(F.text == '📝 Записаться')
 async def handle_reply_book(message: types.Message, state: FSMContext):
     """Запуск сценария записи по Reply-кнопке."""
@@ -85,7 +103,7 @@ async def handle_reply_book(message: types.Message, state: FSMContext):
 
 
 # -------------------------------------------------------------------
-# Запуск записи по inline-кнопке (оставлено на случай, если используется)
+# Запуск записи по inline-кнопке (оставлено на случай, если используется).
 @user_router.callback_query(F.data == 'book')
 async def book_service(callback: types.CallbackQuery, state: FSMContext):
     """Запуск сценария записи по Inline-кнопке."""
@@ -93,7 +111,7 @@ async def book_service(callback: types.CallbackQuery, state: FSMContext):
 
 
 # -------------------------------------------------------------------
-# FSM-обработчики процесса записи
+# FSM-обработчики процесса записи.
 
 @user_router.callback_query(BookingForm.waiting_for_service, F.data.startswith('service_'))
 async def service_chosen(callback: types.CallbackQuery, state: FSMContext):
@@ -103,7 +121,7 @@ async def service_chosen(callback: types.CallbackQuery, state: FSMContext):
     async with async_session_maker() as session:
         masters = await get_masters_by_service(session, service_id)
     if not masters:
-        await callback.message.edit_text(
+        await safe_edit_text(callback.message,
             'К сожалению, нет мастеров, выполняющих эту услугу.'
         )
         await state.clear()
@@ -115,7 +133,7 @@ async def service_chosen(callback: types.CallbackQuery, state: FSMContext):
         builder.button(text=f'{m.full_name}{desc}', callback_data=f'master_{m.id}')
     builder.button(text='◀️ Назад', callback_data='cancel')
     builder.adjust(1)
-    await callback.message.edit_text('Выберите мастера:', reply_markup=builder.as_markup())
+    await safe_edit_text(callback.message, 'Выберите мастера:', reply_markup=builder.as_markup())
     await state.set_state(BookingForm.waiting_for_master)
     await callback.answer()
 
@@ -126,7 +144,7 @@ async def master_chosen(callback: types.CallbackQuery, state: FSMContext):
     master_id = int(callback.data.split('_')[1])
     await state.update_data(master_id=master_id)
     date_keyboard = await generate_date_keyboard()
-    await callback.message.edit_text(
+    await safe_edit_text(callback.message,
         'Выберите удобную дату:',
         reply_markup=date_keyboard.as_markup()
     )
@@ -146,7 +164,7 @@ async def date_chosen(callback: types.CallbackQuery, state: FSMContext):
     async with async_session_maker() as session:
         free_slots = await get_free_slots(session, master_id, service_id, chosen_date)
     if not free_slots:
-        await callback.message.edit_text(
+        await safe_edit_text(callback.message,
             'На эту дату нет свободного времени. Выберите другую дату.',
             reply_markup=(await generate_date_keyboard()).as_markup()
         )
@@ -157,7 +175,7 @@ async def date_chosen(callback: types.CallbackQuery, state: FSMContext):
         builder.button(text=slot, callback_data=f'slot_{slot}')
     builder.button(text='◀️ Назад', callback_data='cancel')
     builder.adjust(4)
-    await callback.message.edit_text(
+    await safe_edit_text(callback.message,
         'Выберите время:',
         reply_markup=builder.as_markup()
     )
@@ -186,8 +204,9 @@ async def process_name(message: types.Message, state: FSMContext):
         await cancel_booking(message, state)
         return
     name = message.text.strip()
-    if not name:
-        await message.reply('Имя не может быть пустым. Попробуйте ещё раз.')
+    is_valid, error_message = validate_name(name)
+    if not is_valid:
+        await message.reply(error_message)
         return
     await state.update_data(client_name=name)
     contact_keyboard = ReplyKeyboardMarkup(
@@ -213,11 +232,16 @@ async def process_phone(message: types.Message, state: FSMContext):
         return
     if message.contact:
         phone = message.contact.phone_number
+        is_valid = True
+        error_message = None
     else:
         phone = message.text.strip()
-        if not (phone.startswith('+') or phone.startswith('8')):
-            await message.reply('Пожалуйста, введите корректный номер телефона.')
-            return
+        is_valid, error_message = validate_phone(phone)
+
+    if not is_valid:
+        await message.reply(error_message)
+        return
+
     await state.update_data(client_phone=phone)
     await message.answer(
         'Оставьте комментарий к записи (необязательно) или нажмите «Пропустить».',
@@ -242,7 +266,10 @@ async def process_comment(message: types.Message, state: FSMContext):
     if message.text == 'Пропустить ➡️':
         comment = None
     else:
-        comment = message.text.strip()
+        comment, error_message = sanitize_comment(message.text)
+        if error_message:
+            await message.reply(error_message)
+            return
     await state.update_data(comment=comment)
     user_data = await state.get_data()
     chosen_date = date.fromisoformat(user_data['chosen_date'])
@@ -295,7 +322,7 @@ async def confirm_booking(callback: types.CallbackQuery, state: FSMContext, bot:
                 comment=user_data.get('comment')
             )
         except ValueError as error:
-            await callback.message.edit_text(f'Ошибка: {error}')
+            await safe_edit_text(callback.message,f'Ошибка: {error}')
             await state.clear()
             await callback.answer()
             return
@@ -315,7 +342,7 @@ async def confirm_booking(callback: types.CallbackQuery, state: FSMContext, bot:
     from services.notifications import notify_admins
     await notify_admins(bot, client_name, service_name, master_name, date_time_str, phone, comment)
 
-    await callback.message.edit_text(
+    await safe_edit_text(callback.message,
         f'✅ Вы записаны! Ждём вас по адресу: {SALON_ADDRESS}'
     )
     await state.clear()

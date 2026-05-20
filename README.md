@@ -14,3 +14,6 @@
 Как добавить мастера (/add_master).
 Как изменить расписание (/set_schedule).
 Как посмотреть записи (/view_bookings).
+
+## Автор
+https://github.com/Maksim-1995/

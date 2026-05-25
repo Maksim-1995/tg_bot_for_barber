@@ -35,8 +35,9 @@ from aiogram.exceptions import TelegramBadRequest
 
 async def safe_edit_text(message: types.Message, text: str, reply_markup=None):
     """
-    Безопасное редактирование сообщения:
-    если сообщение не изменилось – игнорирует ошибку Telegram.
+    Безопасное редактирование сообщения.
+    
+    Если сообщение не изменилось – игнорирует ошибку Telegram.
     """
     try:
         await message.edit_text(text, reply_markup=reply_markup)
@@ -54,8 +55,7 @@ CANCEL_KEYBOARD = ReplyKeyboardMarkup(
 user_router = Router()
 
 
-# -------------------------------------------------------------------
-# Вспомогательная функция старта записи (используется из разных мест).
+# Вспомогательная функция старта записи.
 async def start_booking(target: types.Message | types.CallbackQuery, state: FSMContext):
     """Общая логика начала записи: показывает список услуг."""
     async with async_session_maker() as session:
@@ -83,7 +83,6 @@ async def start_booking(target: types.Message | types.CallbackQuery, state: FSMC
         await target.answer()
 
 
-# -------------------------------------------------------------------
 # Команда /start – приветствие с постоянной кнопкой «Записаться».
 @user_router.message(CommandStart())
 async def start_command(message: types.Message):
@@ -94,7 +93,6 @@ async def start_command(message: types.Message):
     )
 
 
-# -------------------------------------------------------------------
 # Запуск записи по reply-кнопке «📝 Записаться».
 @user_router.message(F.text == '📝 Записаться')
 async def handle_reply_book(message: types.Message, state: FSMContext):
@@ -102,17 +100,14 @@ async def handle_reply_book(message: types.Message, state: FSMContext):
     await start_booking(message, state)
 
 
-# -------------------------------------------------------------------
-# Запуск записи по inline-кнопке (оставлено на случай, если используется).
+# Запуск записи по inline-кнопке.
 @user_router.callback_query(F.data == 'book')
 async def book_service(callback: types.CallbackQuery, state: FSMContext):
     """Запуск сценария записи по Inline-кнопке."""
     await start_booking(callback, state)
 
 
-# -------------------------------------------------------------------
 # FSM-обработчики процесса записи.
-
 @user_router.callback_query(BookingForm.waiting_for_service, F.data.startswith('service_'))
 async def service_chosen(callback: types.CallbackQuery, state: FSMContext):
     """Пользователь выбрал услугу, показать мастеров."""
@@ -327,7 +322,7 @@ async def confirm_booking(callback: types.CallbackQuery, state: FSMContext, bot:
             await callback.answer()
             return
 
-        # Явная загрузка связанных объектов (чтобы избежать DetachedInstanceError)
+        # Явная загрузка связанных объектов, чтобы избежать DetachedInstanceError
         service_obj = await session.get(Service, user_data['service_id'])
         master_obj = await session.get(Master, user_data['master_id'])
 
@@ -349,9 +344,7 @@ async def confirm_booking(callback: types.CallbackQuery, state: FSMContext, bot:
     await callback.answer()
 
 
-# -------------------------------------------------------------------
 # Универсальные обработчики (кнопка отмены и приветствие)
-
 @user_router.callback_query(F.data == 'cancel')
 async def cancel_callback(callback: types.CallbackQuery, state: FSMContext):
     """Отмена через inline-кнопку (назад/отмена)."""

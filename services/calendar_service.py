@@ -11,7 +11,7 @@ from utils.constants import DAYS_AHEAD, DEFAULT_SLOT_INTERVAL, SLOT_STEP
 
 
 async def generate_date_keyboard() -> InlineKeyboardBuilder:
-    """Создаёт клавиатуру с ближайшими датами (кнопки ДД.ММ)."""
+    """Создаёт клавиатуру с ближайшими датами: кнопки ДД.ММ."""
     builder = InlineKeyboardBuilder()
     today = date.today()
     for day_offset in range(DAYS_AHEAD):
@@ -31,11 +31,11 @@ async def get_free_slots(
     """
     Возвращает список свободных слотов.
     
-    (в формате 'ЧЧ:ММ') для выбранного мастера,
+    в формате 'ЧЧ:ММ' для выбранного мастера,
     услуги и даты. Если слотов нет — пустой список.
     """
     # Получаем расписание мастера на этот день недели.
-    day_of_week = selected_date.weekday()  # 0=ПН
+    day_of_week = selected_date.weekday()  # 0=ПН.
     schedule_result = await session.execute(
         select(Schedule).where(
             Schedule.master_id == master_id,
@@ -51,9 +51,9 @@ async def get_free_slots(
     if not service_result:
         return []
     service_duration = service_result.duration
-    # Интервал между началом слотов (например, 60 минут). Если услуга длиннее интервала, слоты могут быть реже.
+    # Интервал между началом слотов. Если услуга длиннее интервала, слоты могут быть реже.
     slot_interval = DEFAULT_SLOT_INTERVAL
-    # Границы рабочего дня
+    # Границы рабочего дня.
     start_time = schedule.start_time
     end_time = schedule.end_time
     lunch_start = schedule.lunch_start
@@ -103,7 +103,7 @@ async def get_free_slots(
                 break
         if not is_busy:
             free_slots.append(slot_str)
-    # Оставляем слоты, кратные интервалу (например, каждый час — 10:00, 11:00, ...).
+    # Оставляем слоты, кратные интервалу например, каждый час — 10:00, 11:00, ....
     # Но если услуга длится дольше интервала, слоты могут быть реже.
     if slot_interval > 0 and service_duration <= slot_interval:
         # Фильтруем по шагу интервала.

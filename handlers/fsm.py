@@ -4,6 +4,8 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class BookingForm(StatesGroup):
+    """Состояния для процесса записи."""
+
     waiting_for_service = State()
     waiting_for_master = State()
     waiting_for_date = State()

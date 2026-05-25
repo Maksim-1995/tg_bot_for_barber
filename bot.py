@@ -1,8 +1,11 @@
 import asyncio
 from pathlib import Path
+import socket
 
+from aiohttp import TCPConnector
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from config import settings
@@ -16,6 +19,7 @@ from utils.logger import setup_logger
 # Инициализация логгера.
 logger = setup_logger('barbershop_bot')
 
+
 async def init_db():
     """Создаёт таблицы в БД, если их нет."""
     async with engine.begin() as conn:
@@ -27,10 +31,19 @@ async def main():
     await init_db()
     logger.info('База данных инициализирована')
 
-    # 2. Инициализация бота и диспетчера.
+    session = AiohttpSession(
+        connector=TCPConnector(
+            family=socket.AF_INET
+        )
+    )
+
+    # 2. Инициализация бота.
     bot = Bot(
         token=settings.BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        session=session,
+        default=DefaultBotProperties(
+            parse_mode=ParseMode.HTML
+        )
     )
     dp = Dispatcher()
 

@@ -1,11 +1,8 @@
 import asyncio
 from pathlib import Path
-import socket
 
-from aiohttp import TCPConnector
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from config import settings
@@ -25,17 +22,13 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+
 async def main():
     # 1. Инициализация БД.
     Path('data').mkdir(exist_ok=True)
     await init_db()
     logger.info('База данных инициализирована')
 
-    session = AiohttpSession(
-        connector=TCPConnector(
-            family=socket.AF_INET
-        )
-    )
 
     # 2. Инициализация бота.
     bot = Bot(

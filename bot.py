@@ -33,10 +33,7 @@ async def main():
     # 2. Инициализация бота.
     bot = Bot(
         token=settings.BOT_TOKEN,
-        session=session,
-        default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML
-        )
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
 

@@ -1,0 +1,56 @@
+C:\Develop\project\tg_bot_for_barber
+├── alembic
+|  └── env.py
+├── bot.py
+├── cat
+├── config.py
+├── create_appointment.py
+├── data
+|  └── database.db
+├── database.py
+├── Dockerfile
+├── filters
+|  ├── admin_filter.py
+|  └── __pycache__
+├── handlers
+|  ├── admin_router.py
+|  ├── fsm.py
+|  ├── user_router.py
+|  ├── __init__.py
+|  └── __pycache__
+├── keyboards
+|  ├── inline_kb.py
+|  ├── reply_kb.py
+|  ├── __init__.py
+|  └── __pycache__
+├── logs
+|  └── bot.log
+├── models.py
+├── README.md
+├── requirements.txt
+├── services
+|  ├── calendar_service.py
+|  ├── db_service.py
+|  ├── notifications.py
+|  ├── __init__.py
+|  └── __pycache__
+├── utils
+|  ├── constants.py
+|  ├── datetime.py
+|  ├── logger.py
+|  ├── validators.py
+|  ├── __init__.py
+|  └── __pycache__
+├── venv
+|  ├── Include
+|  ├── Lib
+|  ├── pyvenv.cfg
+|  └── Scripts
+└── __pycache__
+   ├── bot.cpython-311.pyc
+   ├── config.cpython-311.pyc
+   ├── database.cpython-311.pyc
+   └── models.cpython-311.pyc
+
+directory: 18 file: 34
+

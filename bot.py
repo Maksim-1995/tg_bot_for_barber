@@ -46,13 +46,7 @@ async def main():
     await dp.start_polling(bot)
 
 async def run_bot():
-    while True:
-        try:
-            await main()
-        except Exception as e:
-            logger.error(f'Ошибка запуска бота: {e}')
-            logger.info('Повторное подключение через 30 секунд...')
-            await asyncio.sleep(30)
+    await main()
 
 
 if __name__ == '__main__':

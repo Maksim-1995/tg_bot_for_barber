@@ -1,9 +1,28 @@
-venv
-__pycache__
-.git
-.env
-logs
+# Виртуальное окружение
+venv/
+.venv/
+
+# Кеш и служебные файлы Python
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Git и настройки IDE
+.git/
+.github/
+.idea/
+.vscode/
+
+# Секреты
+.env
+
+# Локальные данные
 data/*.db
 data/*.db-*
-venv,.git
+logs/
+*.log
+
+# Файлы, не нужные внутри рабочего образа
+tests/
+README.md

@@ -1,0 +1,19 @@
+name: barber-bot
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: barber-bot:local
+    container_name: barber_bot_local
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs

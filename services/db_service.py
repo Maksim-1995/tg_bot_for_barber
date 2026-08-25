@@ -5,13 +5,283 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from datetime import date, datetime, time, timedelta
 
-from models import Appointment, ClosedDate, Master, Schedule, Service, User, master_service
-from utils.constants import DEFAULT_SLOT_INTERVAL, SLOT_STEP
+from models import Appointment, ClosedDate, Master, SalonSetting, Schedule, Service, User, master_service
+from utils.constants import ALLOWED_SLOT_INTERVALS, DEFAULT_SALON_ADDRESS, DEFAULT_SLOT_INTERVAL, SLOT_STEP
 
 
 _appointment_creation_lock = asyncio.Lock()
 APPOINTMENT_STATUS_ACTIVE = 'active'
 APPOINTMENT_STATUS_CANCELLED = 'cancelled'
+SALON_ADDRESS_SETTING_KEY = 'salon_address'
+SLOT_INTERVAL_SETTING_KEY = 'slot_interval'
+
+DEMO_SERVICES = [
+    {'name': 'Стрижка', 'duration': 45},
+    {'name': 'Окрашивание', 'duration': 120},
+    {'name': 'Укладка', 'duration': 45},
+    {'name': 'Бритьё', 'duration': 30},
+    {'name': 'Детская стрижка', 'duration': 30},
+    {'name': 'Уход за волосами', 'duration': 60},
+]
+
+DEMO_MASTERS = [
+    {
+        'full_name': 'Анна Иванова',
+        'description': 'Женские стрижки, укладки и сложное окрашивание',
+        'services': ['Стрижка', 'Окрашивание', 'Укладка', 'Уход за волосами'],
+        'working_days': [0, 1, 2, 3, 4],
+        'start_time': '10:00',
+        'end_time': '20:00',
+        'lunch_start': '14:00',
+        'lunch_end': '15:00',
+    },
+    {
+        'full_name': 'Сергей Петров',
+        'description': 'Барбер, мужские и детские стрижки',
+        'services': ['Стрижка', 'Бритьё', 'Детская стрижка'],
+        'working_days': [1, 2, 3, 4, 5],
+        'start_time': '09:00',
+        'end_time': '18:00',
+        'lunch_start': '13:00',
+        'lunch_end': '14:00',
+    },
+    {
+        'full_name': 'Мария Смирнова',
+        'description': 'Колорист, уходовые процедуры и вечерние укладки',
+        'services': ['Окрашивание', 'Укладка', 'Уход за волосами'],
+        'working_days': [0, 2, 3, 4, 5],
+        'start_time': '11:00',
+        'end_time': '20:00',
+        'lunch_start': '15:00',
+        'lunch_end': '16:00',
+    },
+    {
+        'full_name': 'Дмитрий Волков',
+        'description': 'Классическое бритьё и быстрые мужские стрижки',
+        'services': ['Стрижка', 'Бритьё'],
+        'working_days': [0, 1, 3, 4, 5],
+        'start_time': '10:00',
+        'end_time': '19:00',
+        'lunch_start': '14:00',
+        'lunch_end': '15:00',
+    },
+]
+
+
+def validate_slot_interval(value: int | str) -> int:
+    """Проверяет интервал сетки записи."""
+    try:
+        interval = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError('Интервал слотов должен быть числом: 30 или 60') from error
+    if interval not in ALLOWED_SLOT_INTERVALS:
+        allowed_values = ', '.join(map(str, ALLOWED_SLOT_INTERVALS))
+        raise ValueError(f'Интервал слотов должен быть одним из значений: {allowed_values}')
+    return interval
+
+
+async def get_salon_setting(session: AsyncSession, key: str, default: str) -> str:
+    result = await session.execute(select(SalonSetting).where(SalonSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return default
+    return setting.value
+
+
+async def _set_salon_setting(session: AsyncSession, key: str, value: str) -> bool:
+    result = await session.execute(select(SalonSetting).where(SalonSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if setting:
+        if setting.value == value:
+            return False
+        setting.value = value
+        return True
+
+    session.add(SalonSetting(key=key, value=value))
+    return True
+
+
+async def get_salon_address(session: AsyncSession) -> str:
+    return await get_salon_setting(session, SALON_ADDRESS_SETTING_KEY, DEFAULT_SALON_ADDRESS)
+
+
+async def update_salon_address(session: AsyncSession, address: str) -> str:
+    address = address.strip()
+    if not address:
+        raise ValueError('Адрес салона не может быть пустым')
+    await _set_salon_setting(session, SALON_ADDRESS_SETTING_KEY, address)
+    await session.commit()
+    return address
+
+
+async def get_slot_interval(session: AsyncSession) -> int:
+    raw_value = await get_salon_setting(
+        session,
+        SLOT_INTERVAL_SETTING_KEY,
+        str(DEFAULT_SLOT_INTERVAL),
+    )
+    try:
+        return validate_slot_interval(raw_value)
+    except ValueError:
+        return DEFAULT_SLOT_INTERVAL
+
+
+async def update_slot_interval(session: AsyncSession, interval: int | str) -> int:
+    interval = validate_slot_interval(interval)
+    await _set_salon_setting(session, SLOT_INTERVAL_SETTING_KEY, str(interval))
+    await session.commit()
+    return interval
+
+
+async def get_salon_settings(session: AsyncSession) -> dict[str, str | int]:
+    return {
+        'address': await get_salon_address(session),
+        'slot_interval': await get_slot_interval(session),
+    }
+
+
+async def seed_demo_salon(session: AsyncSession) -> dict[str, int]:
+    """Добавляет демонстрационные услуги, мастеров, расписание и базовые настройки."""
+    summary = {
+        'services_created': 0,
+        'services_updated': 0,
+        'masters_created': 0,
+        'masters_updated': 0,
+        'schedules_created': 0,
+        'schedules_updated': 0,
+        'settings_updated': 0,
+    }
+
+    service_map = {}
+    for service_data in DEMO_SERVICES:
+        result = await session.execute(
+            select(Service).where(Service.name == service_data['name'])
+        )
+        service = result.scalar_one_or_none()
+        if not service:
+            service = Service(
+                name=service_data['name'],
+                duration=service_data['duration'],
+                is_active=1,
+            )
+            session.add(service)
+            await session.flush()
+            summary['services_created'] += 1
+        else:
+            changed = False
+            if service.duration != service_data['duration']:
+                service.duration = service_data['duration']
+                changed = True
+            if service.is_active != 1:
+                service.is_active = 1
+                changed = True
+            if changed:
+                summary['services_updated'] += 1
+        service_map[service.name] = service
+
+    master_map = {}
+    for master_data in DEMO_MASTERS:
+        result = await session.execute(
+            select(Master)
+            .options(selectinload(Master.services))
+            .where(Master.full_name == master_data['full_name'])
+            .order_by(Master.id)
+        )
+        master = result.scalars().first()
+        created = False
+        changed = False
+        if not master:
+            master = Master(
+                full_name=master_data['full_name'],
+                description=master_data['description'],
+                is_active=1,
+            )
+            session.add(master)
+            await session.flush()
+            created = True
+            summary['masters_created'] += 1
+        else:
+            if master.description != master_data['description']:
+                master.description = master_data['description']
+                changed = True
+            if master.is_active != 1:
+                master.is_active = 1
+                changed = True
+
+        selected_services = [
+            service_map[service_name]
+            for service_name in master_data['services']
+            if service_name in service_map
+        ]
+        current_service_ids = {service.id for service in master.services}
+        selected_service_ids = {service.id for service in selected_services}
+        if current_service_ids != selected_service_ids:
+            master.services = selected_services
+            changed = True
+        if changed and not created:
+            summary['masters_updated'] += 1
+        master_map[master_data['full_name']] = master
+
+    await session.flush()
+
+    for master_data in DEMO_MASTERS:
+        master = master_map[master_data['full_name']]
+        working_days = set(master_data['working_days'])
+        for day_of_week in range(7):
+            result = await session.execute(
+                select(Schedule).where(
+                    Schedule.master_id == master.id,
+                    Schedule.day_of_week == day_of_week,
+                )
+            )
+            schedule = result.scalar_one_or_none()
+            is_working = 1 if day_of_week in working_days else 0
+            if is_working:
+                start_time = time.fromisoformat(master_data['start_time'])
+                end_time = time.fromisoformat(master_data['end_time'])
+                lunch_start = time.fromisoformat(master_data['lunch_start'])
+                lunch_end = time.fromisoformat(master_data['lunch_end'])
+            else:
+                start_time = time(0, 0)
+                end_time = time(0, 0)
+                lunch_start = None
+                lunch_end = None
+
+            if not schedule:
+                schedule = Schedule(
+                    master_id=master.id,
+                    day_of_week=day_of_week,
+                    start_time=start_time,
+                    end_time=end_time,
+                    is_working=is_working,
+                    lunch_start=lunch_start,
+                    lunch_end=lunch_end,
+                )
+                session.add(schedule)
+                summary['schedules_created'] += 1
+                continue
+
+            changed = False
+            for field, value in (
+                ('start_time', start_time),
+                ('end_time', end_time),
+                ('is_working', is_working),
+                ('lunch_start', lunch_start),
+                ('lunch_end', lunch_end),
+            ):
+                if getattr(schedule, field) != value:
+                    setattr(schedule, field, value)
+                    changed = True
+            if changed:
+                summary['schedules_updated'] += 1
+
+    if await _set_salon_setting(session, SALON_ADDRESS_SETTING_KEY, DEFAULT_SALON_ADDRESS):
+        summary['settings_updated'] += 1
+    if await _set_salon_setting(session, SLOT_INTERVAL_SETTING_KEY, str(DEFAULT_SLOT_INTERVAL)):
+        summary['settings_updated'] += 1
+
+    await session.commit()
+    return summary
 
 
 
@@ -329,7 +599,8 @@ async def ensure_slot_available(
         raise ValueError('Выбранное время вне рабочего графика мастера')
 
     minutes_from_start = int((date_time - work_start).total_seconds() // 60)
-    required_interval = DEFAULT_SLOT_INTERVAL if service.duration <= DEFAULT_SLOT_INTERVAL else SLOT_STEP
+    slot_interval = await get_slot_interval(session)
+    required_interval = slot_interval if service.duration <= slot_interval else SLOT_STEP
     if minutes_from_start < 0 or minutes_from_start % required_interval != 0:
         raise ValueError('Выбранное время не соответствует сетке записи')
 

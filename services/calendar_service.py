@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from models import Appointment, ClosedDate, Schedule, Service
-from utils.constants import DAYS_AHEAD, DEFAULT_SLOT_INTERVAL, SLOT_STEP
+from utils.constants import DAYS_AHEAD, SLOT_STEP
+from services.db_service import APPOINTMENT_STATUS_ACTIVE, get_slot_interval
 
 
 async def generate_date_keyboard() -> InlineKeyboardBuilder:
@@ -57,8 +58,8 @@ async def get_free_slots(
     if not service_result:
         return []
     service_duration = service_result.duration
-    # Интервал между началом слотов. Если услуга длиннее интервала, слоты могут быть реже.
-    slot_interval = DEFAULT_SLOT_INTERVAL
+    # Интервал между началом слотов управляется из настроек салона.
+    slot_interval = await get_slot_interval(session)
     # Границы рабочего дня.
     start_time = schedule.start_time
     end_time = schedule.end_time
@@ -92,7 +93,7 @@ async def get_free_slots(
     appointments_result = await session.execute(
         select(Appointment).where(
             Appointment.master_id == master_id,
-            Appointment.status == 'active',
+            Appointment.status == APPOINTMENT_STATUS_ACTIVE,
             Appointment.date_time < datetime.combine(selected_date + timedelta(days=1), time.min),
             Appointment.end_time > datetime.combine(selected_date, time.min)
         )

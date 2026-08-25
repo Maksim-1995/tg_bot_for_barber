@@ -117,3 +117,14 @@ class ClosedDate(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False)
     reason = Column(String, nullable=True)
+
+
+class SalonSetting(Base):
+    """Настройка салона, которую можно менять из админки."""
+
+    __tablename__ = 'salon_settings'
+    __table_args__ = (UniqueConstraint('key', name='uq_salon_settings_key'),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, nullable=False)
+    value = Column(String, nullable=False)

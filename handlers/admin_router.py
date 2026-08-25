@@ -17,6 +17,7 @@ from handlers.fsm import (
     AdminEditMasterForm,
     AdminEditServiceForm,
     AdminMasterForm,
+    AdminSalonSettingsForm,
     AdminScheduleForm,
     AdminServiceForm,
 )
@@ -33,17 +34,22 @@ from services.db_service import (
     get_masters,
     get_masters_by_service,
     get_or_create_manual_user,
+    get_salon_settings,
     get_service,
     get_services,
     reschedule_appointment,
     remove_closed_date,
+    seed_demo_salon,
     set_master_active,
     set_master_services,
     set_service_active,
     set_master_day_off,
     set_master_schedule,
+    update_salon_address,
     update_master,
     update_service,
+    update_slot_interval,
+    validate_slot_interval,
 )
 from services.calendar_service import get_free_slots
 from services.notifications import notify_client_booking_cancelled, notify_client_booking_rescheduled
@@ -77,7 +83,8 @@ def admin_main_menu_kb():
     builder.button(text='Расписание', callback_data='admin_menu_schedule')
     builder.button(text='Записи', callback_data='admin_menu_bookings')
     builder.button(text='Выходные даты', callback_data='admin_menu_closed_dates')
-    builder.adjust(2, 2, 1)
+    builder.button(text='Настройки салона', callback_data='admin_menu_settings')
+    builder.adjust(2, 2, 2)
     return builder.as_markup()
 
 
@@ -125,6 +132,16 @@ def admin_closed_dates_menu_kb():
     builder.button(text='Добавить выходную дату', callback_data='admin_action_add_closed_date')
     builder.button(text='Убрать выходную дату', callback_data='admin_action_remove_closed_date')
     builder.button(text='Список выходных дат', callback_data='admin_action_list_closed_dates')
+    builder.button(text='Назад', callback_data='admin_menu_main')
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def admin_settings_menu_kb():
+    builder = InlineKeyboardBuilder()
+    builder.button(text='Изменить адрес', callback_data='admin_action_set_address')
+    builder.button(text='Интервал слотов', callback_data='admin_action_set_slot_interval')
+    builder.button(text='Добавить демо-данные', callback_data='admin_action_seed_demo')
     builder.button(text='Назад', callback_data='admin_menu_main')
     builder.adjust(1)
     return builder.as_markup()
@@ -385,6 +402,33 @@ def booking_slots_kb(slots: list[str]):
     return builder.as_markup()
 
 
+def slot_interval_kb():
+    builder = InlineKeyboardBuilder()
+    builder.button(text='30 минут', callback_data='admin_settings_slot_interval_30')
+    builder.button(text='60 минут', callback_data='admin_settings_slot_interval_60')
+    builder.button(text='Отмена', callback_data='admin_cancel')
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def format_salon_settings(settings: dict[str, str | int]) -> str:
+    return (
+        'Настройки салона:\n'
+        f'Адрес: {settings["address"]}\n'
+        f'Интервал слотов: {settings["slot_interval"]} мин'
+    )
+
+
+def format_seed_demo_result(summary: dict[str, int]) -> str:
+    return (
+        'Демо-салон готов.\n'
+        f'Услуги: добавлено {summary["services_created"]}, обновлено {summary["services_updated"]}\n'
+        f'Мастера: добавлено {summary["masters_created"]}, обновлено {summary["masters_updated"]}\n'
+        f'Расписание: добавлено {summary["schedules_created"]}, обновлено {summary["schedules_updated"]}\n'
+        f'Настройки: обновлено {summary["settings_updated"]}'
+    )
+
+
 def format_appointment_summary(appointment) -> str:
     text = (
         f'Запись #{appointment.id}\n'
@@ -508,6 +552,18 @@ async def open_admin_closed_dates_menu(callback: types.CallbackQuery, state: FSM
     await callback.answer()
 
 
+@admin_router.callback_query(F.data == 'admin_menu_settings')
+async def open_admin_settings_menu(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    async with async_session_maker() as session:
+        settings = await get_salon_settings(session)
+    await callback.message.edit_text(
+        format_salon_settings(settings),
+        reply_markup=admin_settings_menu_kb(),
+    )
+    await callback.answer()
+
+
 @admin_router.callback_query(F.data == 'admin_action_add_service')
 async def menu_add_service(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -590,6 +646,145 @@ async def menu_remove_closed_date(callback: types.CallbackQuery, state: FSMConte
 async def menu_list_closed_dates(callback: types.CallbackQuery):
     await callback.answer()
     await cmd_list_closed_dates(callback.message)
+
+
+@admin_router.callback_query(F.data == 'admin_action_set_address')
+async def menu_set_salon_address(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text('Введите новый адрес салона:')
+    await callback.message.answer('Для отмены нажмите кнопку.', reply_markup=admin_cancel_kb())
+    await state.set_state(AdminSalonSettingsForm.waiting_for_address)
+    await callback.answer()
+
+
+@admin_router.callback_query(F.data == 'admin_action_set_slot_interval')
+async def menu_set_slot_interval(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text('Выберите интервал между слотами:', reply_markup=slot_interval_kb())
+    await state.set_state(AdminSalonSettingsForm.waiting_for_slot_interval)
+    await callback.answer()
+
+
+@admin_router.callback_query(F.data == 'admin_action_seed_demo')
+async def menu_seed_demo(callback: types.CallbackQuery, state: FSMContext):
+    async with callback_action_lock(callback, 'admin_seed_demo'):
+        await state.clear()
+        async with async_session_maker() as session:
+            summary = await seed_demo_salon(session)
+        await callback.message.edit_text(
+            format_seed_demo_result(summary),
+            reply_markup=admin_after_action_kb('admin_menu_settings', 'К настройкам'),
+        )
+        await callback.answer()
+
+
+@admin_router.message(Command('salon_settings', 'settings'))
+async def cmd_salon_settings(message: types.Message, state: FSMContext):
+    await state.clear()
+    async with async_session_maker() as session:
+        settings = await get_salon_settings(session)
+    await message.answer(format_salon_settings(settings), reply_markup=admin_settings_menu_kb())
+
+
+@admin_router.message(Command('set_salon_address'))
+async def cmd_set_salon_address(message: types.Message, state: FSMContext):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) == 2:
+        try:
+            async with async_session_maker() as session:
+                address = await update_salon_address(session, parts[1])
+        except ValueError as error:
+            await message.reply(f'Ошибка: {error}')
+            return
+        await send_admin_result(
+            message,
+            f'Адрес салона обновлён: {address}',
+            section_callback='admin_menu_settings',
+            section_text='К настройкам',
+        )
+        return
+
+    await state.clear()
+    await message.answer('Введите новый адрес салона:', reply_markup=admin_cancel_kb())
+    await state.set_state(AdminSalonSettingsForm.waiting_for_address)
+
+
+@admin_router.message(AdminSalonSettingsForm.waiting_for_address, F.text, ~F.text.startswith('/'))
+async def process_salon_address(message: types.Message, state: FSMContext):
+    try:
+        async with async_session_maker() as session:
+            address = await update_salon_address(session, message.text)
+    except ValueError as error:
+        await message.reply(f'Ошибка: {error}')
+        return
+    await finish_admin_action(
+        message,
+        state,
+        f'Адрес салона обновлён: {address}',
+        section_callback='admin_menu_settings',
+        section_text='К настройкам',
+    )
+
+
+@admin_router.message(Command('set_slot_interval'))
+async def cmd_set_slot_interval(message: types.Message, state: FSMContext):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) == 2:
+        try:
+            async with async_session_maker() as session:
+                interval = await update_slot_interval(session, parts[1])
+        except ValueError as error:
+            await message.reply(f'Ошибка: {error}')
+            return
+        await send_admin_result(
+            message,
+            f'Интервал слотов обновлён: {interval} мин.',
+            section_callback='admin_menu_settings',
+            section_text='К настройкам',
+        )
+        return
+
+    await state.clear()
+    await message.answer('Выберите интервал между слотами:', reply_markup=slot_interval_kb())
+    await state.set_state(AdminSalonSettingsForm.waiting_for_slot_interval)
+
+
+@admin_router.callback_query(
+    AdminSalonSettingsForm.waiting_for_slot_interval,
+    F.data.startswith('admin_settings_slot_interval_'),
+)
+async def choose_slot_interval(callback: types.CallbackQuery, state: FSMContext):
+    async with callback_action_lock(callback, 'admin_set_slot_interval'):
+        if not await is_expected_state(state, AdminSalonSettingsForm.waiting_for_slot_interval):
+            await answer_repeated_admin_action(callback)
+            return
+        interval_raw = callback.data.removeprefix('admin_settings_slot_interval_')
+        try:
+            interval = validate_slot_interval(interval_raw)
+            async with async_session_maker() as session:
+                await update_slot_interval(session, interval)
+        except ValueError as error:
+            await callback.answer(str(error), show_alert=True)
+            return
+        await state.clear()
+        await callback.message.edit_text(
+            f'Интервал слотов обновлён: {interval} мин.',
+            reply_markup=admin_after_action_kb('admin_menu_settings', 'К настройкам'),
+        )
+        await callback.answer()
+
+
+@admin_router.message(Command('seed_demo'))
+async def cmd_seed_demo(message: types.Message, state: FSMContext):
+    await state.clear()
+    async with async_session_maker() as session:
+        summary = await seed_demo_salon(session)
+    await send_admin_result(
+        message,
+        format_seed_demo_result(summary),
+        section_callback='admin_menu_settings',
+        section_text='К настройкам',
+    )
 
 
 @admin_router.message(Command('add_service'))

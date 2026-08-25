@@ -13,6 +13,8 @@ from handlers.admin_router import (
     admin_masters_menu_kb,
     admin_schedule_menu_kb,
     admin_services_menu_kb,
+    admin_settings_menu_kb,
+    format_salon_settings,
     parse_admin_date,
     parse_callback_action,
     parse_callback_date,
@@ -20,6 +22,7 @@ from handlers.admin_router import (
     parse_callback_slot,
     parse_slot_time,
     parse_time_range,
+    slot_interval_kb,
 )
 
 
@@ -46,6 +49,7 @@ class AdminHelperTests(unittest.TestCase):
                 'admin_menu_schedule',
                 'admin_menu_bookings',
                 'admin_menu_closed_dates',
+                'admin_menu_settings',
             ],
         )
 
@@ -56,9 +60,26 @@ class AdminHelperTests(unittest.TestCase):
             admin_schedule_menu_kb(),
             admin_bookings_menu_kb(),
             admin_closed_dates_menu_kb(),
+            admin_settings_menu_kb(),
         ]
         for markup in submenus:
             self.assertIn('admin_menu_main', keyboard_callbacks(markup))
+
+    def test_slot_interval_keyboard_callbacks(self):
+        callbacks = keyboard_callbacks(slot_interval_kb())
+        self.assertEqual(
+            callbacks,
+            [
+                'admin_settings_slot_interval_30',
+                'admin_settings_slot_interval_60',
+                'admin_cancel',
+            ],
+        )
+
+    def test_format_salon_settings(self):
+        text = format_salon_settings({'address': 'Адрес', 'slot_interval': 30})
+        self.assertIn('Адрес: Адрес', text)
+        self.assertIn('Интервал слотов: 30 мин', text)
 
     def test_admin_after_action_callbacks(self):
         callbacks = keyboard_callbacks(admin_after_action_kb('admin_menu_services', 'К услугам'))

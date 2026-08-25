@@ -110,6 +110,11 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local runtime data
+data/*.db
+data/*.db-*
+logs/
+
 # Spyder project settings
 .spyderproject
 .spyproject

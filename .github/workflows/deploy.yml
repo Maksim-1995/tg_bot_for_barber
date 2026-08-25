@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  IMAGE: maksim1995/hw_checker_bot
+  IMAGE: maksim1995/barber_bot
 
 jobs:
   build-and-push:
@@ -39,7 +39,9 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            docker pull maksim1995/hw_checker_bot:latest
+            mkdir -p ~/barber_bot_data
+
+            docker pull maksim1995/barber_bot:latest
 
             docker stop barber_bot || true
             docker rm barber_bot || true
@@ -48,4 +50,5 @@ jobs:
               --name barber_bot \
               --restart unless-stopped \
               --env-file .env \
-              maksim1995/hw_checker_bot:latest
+              -v ~/barber_bot_data:/app/data \
+              maksim1995/barber_bot:latest

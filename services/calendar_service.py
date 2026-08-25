@@ -1,12 +1,12 @@
 """Логика работы с датами и временными слотами."""
 
 from datetime import datetime, timedelta, time, date
-from typing import List, Optional
+from typing import List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from models import Schedule, Appointment, Service
+from models import Appointment, ClosedDate, Schedule, Service
 from utils.constants import DAYS_AHEAD, DEFAULT_SLOT_INTERVAL, SLOT_STEP
 
 
@@ -18,7 +18,7 @@ async def generate_date_keyboard() -> InlineKeyboardBuilder:
         day = today + timedelta(days=day_offset)
         day_str = day.strftime('%d.%m')
         builder.button(text=day_str, callback_data=f'date_{day.isoformat()}')
-    builder.button(text='◀️ Назад', callback_data='cancel')
+    builder.button(text='🏠 В главное меню', callback_data='cancel')
     builder.adjust(4)  # по 4 кнопки в ряд.
     return builder
 
@@ -34,6 +34,12 @@ async def get_free_slots(
     в формате 'ЧЧ:ММ' для выбранного мастера,
     услуги и даты. Если слотов нет — пустой список.
     """
+    closed_date_result = await session.execute(
+        select(ClosedDate).where(ClosedDate.date == selected_date)
+    )
+    if closed_date_result.scalar_one_or_none():
+        return []
+
     # Получаем расписание мастера на этот день недели.
     day_of_week = selected_date.weekday()  # 0=ПН.
     schedule_result = await session.execute(
@@ -60,9 +66,14 @@ async def get_free_slots(
     lunch_end = schedule.lunch_end
     # Формируем возможные слоты: начинаем с start_time, шаг SLOT_STEP минут.
     slots = []
+    now = datetime.now()
     current_time = datetime.combine(selected_date, start_time)
     end_datetime = datetime.combine(selected_date, end_time)
     while current_time + timedelta(minutes=service_duration) <= end_datetime:
+        if current_time <= now:
+            current_time += timedelta(minutes=SLOT_STEP)
+            continue
+
         slot_start = current_time.time()
         slot_end = (current_time + timedelta(minutes=service_duration)).time()
         # Пропускаем слоты, попадающие на обед.
@@ -81,8 +92,9 @@ async def get_free_slots(
     appointments_result = await session.execute(
         select(Appointment).where(
             Appointment.master_id == master_id,
-            Appointment.date_time >= datetime.combine(selected_date, start_time),
-            Appointment.end_time <= datetime.combine(selected_date, end_time)
+            Appointment.status == 'active',
+            Appointment.date_time < datetime.combine(selected_date + timedelta(days=1), time.min),
+            Appointment.end_time > datetime.combine(selected_date, time.min)
         )
     )
     busy_periods = []
@@ -106,8 +118,14 @@ async def get_free_slots(
     # Оставляем слоты, кратные интервалу например, каждый час — 10:00, 11:00, ....
     # Но если услуга длится дольше интервала, слоты могут быть реже.
     if slot_interval > 0 and service_duration <= slot_interval:
-        # Фильтруем по шагу интервала.
-        step = slot_interval // SLOT_STEP  # сколько шагов между разрешёнными слотами.
-        free_slots = [slot for i, slot in enumerate(free_slots) if i % step == 0]
+        schedule_start_dt = datetime.combine(selected_date, start_time)
+        filtered_slots = []
+        for slot in free_slots:
+            slot_hour, slot_minute = map(int, slot.split(':'))
+            slot_dt = datetime.combine(selected_date, time(slot_hour, slot_minute))
+            minutes_from_start = int((slot_dt - schedule_start_dt).total_seconds() // 60)
+            if minutes_from_start % slot_interval == 0:
+                filtered_slots.append(slot)
+        free_slots = filtered_slots
     # Если услуга длиннее интервала, этот фильтр не применяем, чтобы не потерять возможные слоты.
     return free_slots

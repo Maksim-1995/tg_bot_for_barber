@@ -8,7 +8,7 @@ MIN_NAME_LENGTH = 2
 MAX_NAME_LENGTH = 40
 
 # Регулярное выражение для российского номера телефона.
-PHONE_PATTERN = re.compile(r'^(\+7|8)\d{10}$')
+PHONE_PATTERN = re.compile(r'^(\+7|8|7)\d{10}$')
 
 # Разрешённые символы в имени: буквы, пробел, дефис, апостроф.
 NAME_PATTERN = re.compile(r"^[а-яёА-ЯЁA-Za-z\s\-']+$")
@@ -48,13 +48,22 @@ def validate_phone(phone: str) -> tuple[bool, str | None]:
     if not phone:
         return False, 'Номер телефона не указан.'
 
-    # Удаляем все нецифровые символы, кроме начального +.
-    cleaned = re.sub(r'[^\d+]', '', phone)
+    cleaned = normalize_phone(phone)
 
     if not PHONE_PATTERN.match(cleaned):
-        return False, 'Введите корректный номер телефона (+7XXXXXXXXXX или 8XXXXXXXXXX).'
+        return False, 'Введите корректный номер телефона (+7XXXXXXXXXX, 7XXXXXXXXXX или 8XXXXXXXXXX).'
 
     return True, None
+
+
+def normalize_phone(phone: str) -> str:
+    """Приводит российский номер к виду +7XXXXXXXXXX, если это возможно."""
+    cleaned = re.sub(r'[^\d+]', '', phone)
+    if cleaned.startswith('8') and len(cleaned) == 11:
+        return f'+7{cleaned[1:]}'
+    if cleaned.startswith('7') and len(cleaned) == 11:
+        return f'+{cleaned}'
+    return cleaned
 
 
 def sanitize_comment(comment: str, max_length: int = 200) -> tuple[str, str | None]:

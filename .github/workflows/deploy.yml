@@ -69,13 +69,19 @@ jobs:
 
     steps:
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            mkdir -p ~/barber_bot_data
+            set -e
+
+            mkdir -p \
+              "$HOME/barber_bot/data" \
+              "$HOME/barber_bot/logs"
+
+            test -f "$HOME/barber_bot/.env"
 
             docker pull maksim1995/barber_bot:latest
 
@@ -85,6 +91,18 @@ jobs:
             docker run -d \
               --name barber_bot \
               --restart unless-stopped \
-              --env-file .env \
-              -v ~/barber_bot_data:/app/data \
+              --stop-timeout 30 \
+              --log-opt max-size=10m \
+              --log-opt max-file=3 \
+              --env-file "$HOME/barber_bot/.env" \
+              -v "$HOME/barber_bot/data:/app/data" \
+              -v "$HOME/barber_bot/logs:/app/logs" \
               maksim1995/barber_bot:latest
+
+            sleep 5
+
+            docker inspect \
+              --format '{{.State.Running}}' \
+              barber_bot | grep -qx true
+
+            docker logs --tail=20 barber_bot

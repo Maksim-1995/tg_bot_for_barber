@@ -5,7 +5,7 @@ import logging
 from aiogram import Bot
 
 from config import settings
-from utils.constants import SALON_ADDRESS
+from utils.constants import DEFAULT_SALON_ADDRESS
 
 
 logger = logging.getLogger(__name__)
@@ -33,9 +33,10 @@ def format_new_booking_admin_message(
     return message
 
 
-def format_client_booking_confirmed_message() -> str:
+def format_client_booking_confirmed_message(salon_address: str | None = None) -> str:
     """Собирает подтверждение записи для клиента."""
-    return f'✅ Вы записаны! Ждём вас по адресу: {SALON_ADDRESS}'
+    address = salon_address or DEFAULT_SALON_ADDRESS
+    return f'✅ Вы записаны! Ждём вас по адресу: {address}'
 
 
 def appointment_service_name(appointment) -> str:

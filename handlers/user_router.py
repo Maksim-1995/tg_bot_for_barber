@@ -15,6 +15,7 @@ from keyboards.reply_kb import main_reply_kb
 from handlers.fsm import BookingForm
 from database import async_session_maker
 from services.db_service import (
+    get_salon_address,
     get_services,
     get_masters_by_service,
     get_or_create_user,
@@ -514,6 +515,7 @@ async def confirm_booking(callback: types.CallbackQuery, state: FSMContext, bot:
             master_name = master_obj.full_name
             date_time_str = appointment.date_time.strftime('%d.%m.%Y в %H:%M')
             comment = appointment.comment
+            salon_address = await get_salon_address(session)
 
         await notify_admins(
             bot,
@@ -527,7 +529,7 @@ async def confirm_booking(callback: types.CallbackQuery, state: FSMContext, bot:
 
         await safe_edit_text(
             callback.message,
-            format_client_booking_confirmed_message(),
+            format_client_booking_confirmed_message(salon_address),
         )
         await state.clear()
         await callback.answer()

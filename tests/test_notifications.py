@@ -63,6 +63,11 @@ class NotificationFormatTests(unittest.TestCase):
         self.assertIn('✅ Вы записаны!', message)
         self.assertIn('м. Отрадное Северный бульвар, д. 3, к. 2', message)
 
+    def test_client_booking_confirmed_message_uses_custom_salon_address(self):
+        message = format_client_booking_confirmed_message('Новый адрес')
+
+        self.assertIn('Новый адрес', message)
+
     def test_client_booking_cancelled_message_contains_reason_when_present(self):
         message = format_client_booking_cancelled_message(
             make_appointment(),

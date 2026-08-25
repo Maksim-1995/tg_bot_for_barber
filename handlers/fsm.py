@@ -67,6 +67,13 @@ class AdminClosedDateForm(StatesGroup):
     waiting_for_reason = State()
 
 
+class AdminSalonSettingsForm(StatesGroup):
+    """Состояния управления настройками салона."""
+
+    waiting_for_address = State()
+    waiting_for_slot_interval = State()
+
+
 class AdminBookingManageForm(StatesGroup):
     """Состояния управления существующей записью."""
 

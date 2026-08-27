@@ -49,14 +49,18 @@ def ensure_schema(engine) -> None:
             for row in conn.execute(text('PRAGMA table_info(services)'))
         }
         if 'is_active' not in service_columns:
-            conn.execute(text('ALTER TABLE services ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1'))
+            conn.execute(
+                text('ALTER TABLE services ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
+            )
 
         master_columns = {
             row[1]
             for row in conn.execute(text('PRAGMA table_info(masters)'))
         }
         if 'is_active' not in master_columns:
-            conn.execute(text('ALTER TABLE masters ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1'))
+            conn.execute(
+                text('ALTER TABLE masters ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
+            )
 
 
 def upsert_setting(session: Session, key: str, value: str) -> bool:
@@ -222,9 +226,18 @@ def main() -> None:
     with Session(engine) as session:
         summary = seed_demo_salon_sync(session)
     print('Демо-салон готов')
-    print(f'Услуги: добавлено {summary["services_created"]}, обновлено {summary["services_updated"]}')
-    print(f'Мастера: добавлено {summary["masters_created"]}, обновлено {summary["masters_updated"]}')
-    print(f'Расписание: добавлено {summary["schedules_created"]}, обновлено {summary["schedules_updated"]}')
+    print(
+        f'Услуги: добавлено {summary["services_created"]}, '
+        f'обновлено {summary["services_updated"]}'
+    )
+    print(
+        f'Мастера: добавлено {summary["masters_created"]}, '
+        f'обновлено {summary["masters_updated"]}'
+    )
+    print(
+        f'Расписание: добавлено {summary["schedules_created"]}, '
+        f'обновлено {summary["schedules_updated"]}'
+    )
     print(f'Настройки: обновлено {summary["settings_updated"]}')
 
 

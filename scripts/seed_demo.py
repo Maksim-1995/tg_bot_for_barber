@@ -24,6 +24,7 @@ from utils.constants import DEFAULT_SALON_ADDRESS, DEFAULT_SLOT_INTERVAL
 
 
 def get_sync_database_url() -> str:
+    """Возвращает sync-URL SQLite из DATABASE_URL."""
     load_dotenv(ROOT_DIR / '.env')
     database_url = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///data/database.db')
     url = make_url(database_url)
@@ -40,6 +41,7 @@ def get_sync_database_url() -> str:
 
 
 def ensure_schema(engine) -> None:
+    """Создаёт таблицы и добавляет недостающие колонки для старых SQLite-баз."""
     Base.metadata.create_all(engine)
     with engine.begin() as conn:
         service_columns = {
@@ -47,17 +49,22 @@ def ensure_schema(engine) -> None:
             for row in conn.execute(text('PRAGMA table_info(services)'))
         }
         if 'is_active' not in service_columns:
-            conn.execute(text('ALTER TABLE services ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1'))
+            conn.execute(
+                text('ALTER TABLE services ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
+            )
 
         master_columns = {
             row[1]
             for row in conn.execute(text('PRAGMA table_info(masters)'))
         }
         if 'is_active' not in master_columns:
-            conn.execute(text('ALTER TABLE masters ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1'))
+            conn.execute(
+                text('ALTER TABLE masters ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
+            )
 
 
 def upsert_setting(session: Session, key: str, value: str) -> bool:
+    """Создаёт или обновляет настройку салона."""
     setting = session.execute(
         select(SalonSetting).where(SalonSetting.key == key)
     ).scalar_one_or_none()
@@ -72,6 +79,7 @@ def upsert_setting(session: Session, key: str, value: str) -> bool:
 
 
 def seed_demo_salon_sync(session: Session) -> dict[str, int]:
+    """Идемпотентно заполняет базу демонстрационным салоном."""
     summary = {
         'services_created': 0,
         'services_updated': 0,
@@ -212,14 +220,24 @@ def seed_demo_salon_sync(session: Session) -> dict[str, int]:
 
 
 def main() -> None:
+    """Запускает демо-наполнение из командной строки."""
     engine = create_engine(get_sync_database_url())
     ensure_schema(engine)
     with Session(engine) as session:
         summary = seed_demo_salon_sync(session)
     print('Демо-салон готов')
-    print(f'Услуги: добавлено {summary["services_created"]}, обновлено {summary["services_updated"]}')
-    print(f'Мастера: добавлено {summary["masters_created"]}, обновлено {summary["masters_updated"]}')
-    print(f'Расписание: добавлено {summary["schedules_created"]}, обновлено {summary["schedules_updated"]}')
+    print(
+        f'Услуги: добавлено {summary["services_created"]}, '
+        f'обновлено {summary["services_updated"]}'
+    )
+    print(
+        f'Мастера: добавлено {summary["masters_created"]}, '
+        f'обновлено {summary["masters_updated"]}'
+    )
+    print(
+        f'Расписание: добавлено {summary["schedules_created"]}, '
+        f'обновлено {summary["schedules_updated"]}'
+    )
     print(f'Настройки: обновлено {summary["settings_updated"]}')
 
 

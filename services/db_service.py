@@ -1,12 +1,29 @@
+"""Сервисный слой для работы с данными салона и записями."""
+
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
 from datetime import date, datetime, time, timedelta
 
-from models import Appointment, ClosedDate, Master, SalonSetting, Schedule, Service, User, master_service
-from utils.constants import ALLOWED_SLOT_INTERVALS, DEFAULT_SALON_ADDRESS, DEFAULT_SLOT_INTERVAL, SLOT_STEP
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from models import (
+    Appointment,
+    ClosedDate,
+    Master,
+    SalonSetting,
+    Schedule,
+    Service,
+    User,
+    master_service,
+)
+from utils.constants import (
+    ALLOWED_SLOT_INTERVALS,
+    DEFAULT_SALON_ADDRESS,
+    DEFAULT_SLOT_INTERVAL,
+    SLOT_STEP,
+)
 
 
 _appointment_creation_lock = asyncio.Lock()
@@ -76,11 +93,14 @@ def validate_slot_interval(value: int | str) -> int:
         raise ValueError('Интервал слотов должен быть числом: 30 или 60') from error
     if interval not in ALLOWED_SLOT_INTERVALS:
         allowed_values = ', '.join(map(str, ALLOWED_SLOT_INTERVALS))
-        raise ValueError(f'Интервал слотов должен быть одним из значений: {allowed_values}')
+        raise ValueError(
+            f'Интервал слотов должен быть одним из значений: {allowed_values}'
+        )
     return interval
 
 
 async def get_salon_setting(session: AsyncSession, key: str, default: str) -> str:
+    """Возвращает значение настройки салона или default."""
     result = await session.execute(select(SalonSetting).where(SalonSetting.key == key))
     setting = result.scalar_one_or_none()
     if not setting:
@@ -102,10 +122,12 @@ async def _set_salon_setting(session: AsyncSession, key: str, value: str) -> boo
 
 
 async def get_salon_address(session: AsyncSession) -> str:
+    """Возвращает адрес салона из настроек."""
     return await get_salon_setting(session, SALON_ADDRESS_SETTING_KEY, DEFAULT_SALON_ADDRESS)
 
 
 async def update_salon_address(session: AsyncSession, address: str) -> str:
+    """Сохраняет новый адрес салона."""
     address = address.strip()
     if not address:
         raise ValueError('Адрес салона не может быть пустым')
@@ -115,6 +137,7 @@ async def update_salon_address(session: AsyncSession, address: str) -> str:
 
 
 async def get_slot_interval(session: AsyncSession) -> int:
+    """Возвращает интервал между слотами записи."""
     raw_value = await get_salon_setting(
         session,
         SLOT_INTERVAL_SETTING_KEY,
@@ -127,6 +150,7 @@ async def get_slot_interval(session: AsyncSession) -> int:
 
 
 async def update_slot_interval(session: AsyncSession, interval: int | str) -> int:
+    """Сохраняет интервал между слотами записи."""
     interval = validate_slot_interval(interval)
     await _set_salon_setting(session, SLOT_INTERVAL_SETTING_KEY, str(interval))
     await session.commit()
@@ -134,6 +158,7 @@ async def update_slot_interval(session: AsyncSession, interval: int | str) -> in
 
 
 async def get_salon_settings(session: AsyncSession) -> dict[str, str | int]:
+    """Возвращает все настройки салона, показываемые в админке."""
     return {
         'address': await get_salon_address(session),
         'slot_interval': await get_slot_interval(session),
@@ -287,6 +312,7 @@ async def seed_demo_salon(session: AsyncSession) -> dict[str, int]:
 
 # ---------- Услуги ----------
 async def add_service(session: AsyncSession, name: str, duration: int):
+    """Создаёт новую услугу."""
     name = name.strip()
     if not name:
         raise ValueError('Название услуги не может быть пустым')
@@ -302,6 +328,7 @@ async def add_service(session: AsyncSession, name: str, duration: int):
 
 
 async def get_services(session: AsyncSession, *, active_only: bool = True):
+    """Возвращает список услуг, при необходимости только активных."""
     query = select(Service).order_by(Service.id)
     if active_only:
         query = query.where(Service.is_active == 1)
@@ -310,6 +337,7 @@ async def get_services(session: AsyncSession, *, active_only: bool = True):
 
 
 async def get_service(session: AsyncSession, service_id: int):
+    """Возвращает услугу по ID."""
     return await session.get(Service, service_id)
 
 
@@ -320,6 +348,7 @@ async def update_service(
     name: str | None = None,
     duration: int | None = None,
 ):
+    """Обновляет название и/или длительность услуги."""
     service = await session.get(Service, service_id)
     if not service:
         raise ValueError('Услуга не найдена')
@@ -342,6 +371,7 @@ async def update_service(
 
 
 async def set_service_active(session: AsyncSession, service_id: int, is_active: bool):
+    """Включает или отключает услугу для новых записей."""
     service = await session.get(Service, service_id)
     if not service:
         raise ValueError('Услуга не найдена')
@@ -351,6 +381,7 @@ async def set_service_active(session: AsyncSession, service_id: int, is_active: 
 
 # ---------- Мастера ----------
 async def add_master(session: AsyncSession, full_name: str, description: str, service_ids: list[int]):
+    """Создаёт мастера и привязывает его к выбранным услугам."""
     full_name = full_name.strip()
     description = description.strip()
     if not full_name:
@@ -394,6 +425,7 @@ async def get_masters_by_service(session: AsyncSession, service_id: int):
 
 
 async def get_masters(session: AsyncSession, *, active_only: bool = True):
+    """Возвращает мастеров вместе со списком услуг."""
     query = (
         select(Master)
         .options(selectinload(Master.services))
@@ -408,6 +440,7 @@ async def get_masters(session: AsyncSession, *, active_only: bool = True):
 
 
 async def get_master(session: AsyncSession, master_id: int):
+    """Возвращает мастера по ID вместе со списком услуг."""
     result = await session.execute(
         select(Master)
         .options(selectinload(Master.services))
@@ -423,6 +456,7 @@ async def update_master(
     full_name: str | None = None,
     description: str | None = None,
 ):
+    """Обновляет имя и/или описание мастера."""
     master = await session.get(Master, master_id)
     if not master:
         raise ValueError('Мастер не найден')
@@ -438,6 +472,7 @@ async def update_master(
 
 
 async def set_master_services(session: AsyncSession, master_id: int, service_ids: list[int]):
+    """Заменяет список услуг, которые выполняет мастер."""
     master = await session.get(Master, master_id)
     if not master:
         raise ValueError('Мастер не найден')
@@ -455,6 +490,7 @@ async def set_master_services(session: AsyncSession, master_id: int, service_ids
 
 
 async def set_master_active(session: AsyncSession, master_id: int, is_active: bool):
+    """Включает или отключает мастера для новых записей."""
     master = await session.get(Master, master_id)
     if not master:
         raise ValueError('Мастер не найден')
@@ -464,6 +500,7 @@ async def set_master_active(session: AsyncSession, master_id: int, is_active: bo
 
 # ---------- Пользователи ----------
 async def get_or_create_user(session: AsyncSession, telegram_id: int, full_name: str, phone: str = None):
+    """Возвращает клиента Telegram или создаёт нового."""
     result = await session.execute(select(User).where(User.telegram_id == telegram_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -512,6 +549,7 @@ async def create_appointment(
     client_phone: str,
     comment: str = None,
 ):
+    """Создаёт запись, проверяя расписание и пересечения с другими записями."""
     async with _appointment_creation_lock:
         try:
             await session.execute(text('BEGIN IMMEDIATE'))
@@ -737,6 +775,7 @@ async def cancel_appointment(
     admin_id: int,
     reason: str | None = None,
 ):
+    """Отменяет активную запись администратором."""
     appointment = await get_appointment_by_id(session, appointment_id)
     if not appointment:
         raise ValueError('Запись не найдена')
@@ -755,6 +794,7 @@ async def reschedule_appointment(
     appointment_id: int,
     new_date_time: datetime,
 ):
+    """Переносит активную запись на новое время."""
     async with _appointment_creation_lock:
         try:
             await session.execute(text('BEGIN IMMEDIATE'))

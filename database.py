@@ -1,3 +1,5 @@
+"""Инициализация SQLAlchemy engine и фабрики async-сессий."""
+
 from pathlib import Path
 
 from sqlalchemy.engine import make_url
@@ -27,5 +29,6 @@ async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_db() -> AsyncSession:
+    """Возвращает async-сессию БД для dependency-style использования."""
     async with async_session_maker() as session:
         yield session

@@ -1,3 +1,5 @@
+"""SQLAlchemy-модели домена парикмахерской."""
+
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -16,7 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    """Базовый класс декларативных моделей SQLAlchemy."""
 
 
 master_service = Table(

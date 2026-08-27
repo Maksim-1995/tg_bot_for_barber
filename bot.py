@@ -1,3 +1,5 @@
+"""Точка входа Telegram-бота и запуск polling."""
+
 import asyncio
 
 from aiogram import Bot, Dispatcher
@@ -110,10 +112,10 @@ async def run_sqlite_migrations(conn):
 
 
 async def main():
+    """Инициализирует БД, бота, роутеры и запускает polling."""
     # 1. Инициализация БД.
     await init_db()
     logger.info('База данных инициализирована')
-
 
     # 2. Инициализация бота.
     bot = Bot(
@@ -130,12 +132,14 @@ async def main():
     logger.info('Бот запущен и готов к работе')
     await dp.start_polling(bot)
 
+
 async def run_bot():
+    """Перезапускает polling после временных ошибок."""
     while True:
         try:
             await main()
-        except Exception as e:
-            logger.error(f'Ошибка запуска бота: {e}')
+        except Exception as error:
+            logger.error('Ошибка запуска бота: %s', error)
             logger.info('Повторное подключение через 30 секунд...')
             await asyncio.sleep(30)
 

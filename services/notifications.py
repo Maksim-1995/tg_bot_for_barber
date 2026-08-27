@@ -40,6 +40,7 @@ def format_client_booking_confirmed_message(salon_address: str | None = None) ->
 
 
 def appointment_service_name(appointment) -> str:
+    """Возвращает название услуги из записи с безопасным fallback."""
     service = getattr(appointment, 'service', None)
     if service and getattr(service, 'name', None):
         return service.name
@@ -47,6 +48,7 @@ def appointment_service_name(appointment) -> str:
 
 
 def appointment_master_name(appointment) -> str:
+    """Возвращает имя мастера из записи с безопасным fallback."""
     master = getattr(appointment, 'master', None)
     if master and getattr(master, 'full_name', None):
         return master.full_name
@@ -110,6 +112,7 @@ async def notify_booking_client(bot: Bot, appointment, text: str) -> bool:
 
 
 async def notify_client_booking_cancelled(bot: Bot, appointment, reason: str | None = None) -> bool:
+    """Уведомляет клиента об отмене записи администратором."""
     return await notify_booking_client(
         bot,
         appointment,
@@ -118,6 +121,7 @@ async def notify_client_booking_cancelled(bot: Bot, appointment, reason: str | N
 
 
 async def notify_client_booking_rescheduled(bot: Bot, appointment) -> bool:
+    """Уведомляет клиента о переносе записи администратором."""
     return await notify_booking_client(
         bot,
         appointment,

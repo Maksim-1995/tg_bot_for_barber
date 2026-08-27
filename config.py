@@ -1,3 +1,5 @@
+"""Конфигурация приложения из переменных окружения."""
+
 import json
 from typing import Annotated, Any
 
@@ -6,6 +8,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Настройки Telegram-бота и подключения к базе данных."""
+
     BOT_TOKEN: str
     ADMIN_IDS: Annotated[list[int], NoDecode] = Field(default_factory=list)
     DATABASE_URL: str = 'sqlite+aiosqlite:///data/database.db'
@@ -19,6 +23,7 @@ class Settings(BaseSettings):
     @field_validator('ADMIN_IDS', mode='before')
     @classmethod
     def parse_admin_ids(cls, value: Any) -> list[int]:
+        """Парсит список администраторов из JSON или строки через запятую."""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -30,6 +35,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode='after')
     def validate_required_admins(self):
+        """Проверяет, что указан хотя бы один администратор."""
         if not self.ADMIN_IDS:
             raise ValueError('ADMIN_IDS must contain at least one Telegram user ID')
         return self

@@ -8,6 +8,8 @@ from typing import Any, AsyncIterator
 
 @dataclass
 class _LockEntry:
+    """Хранит lock и число активных владельцев для callback-действия."""
+
     lock: asyncio.Lock
     refs: int = 0
 
@@ -46,5 +48,6 @@ async def callback_action_lock(callback: Any, action: str) -> AsyncIterator[None
 
 
 async def is_expected_state(state: Any, expected_state: Any) -> bool:
+    """Проверяет, что FSM находится в ожидаемом состоянии."""
     expected = getattr(expected_state, 'state', expected_state)
     return await state.get_state() == expected

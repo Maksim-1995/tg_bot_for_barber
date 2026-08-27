@@ -1,3 +1,5 @@
+"""Административные команды и FSM-сценарии Telegram-бота."""
+
 import shlex
 from datetime import date, datetime, time, timedelta
 
@@ -52,7 +54,10 @@ from services.db_service import (
     validate_slot_interval,
 )
 from services.calendar_service import get_free_slots
-from services.notifications import notify_client_booking_cancelled, notify_client_booking_rescheduled
+from services.notifications import (
+    notify_client_booking_cancelled,
+    notify_client_booking_rescheduled,
+)
 from utils.constants import DAYS_AHEAD
 from utils.interaction_guard import callback_action_lock, is_expected_state
 from utils.validators import normalize_phone, sanitize_comment, validate_name, validate_phone
